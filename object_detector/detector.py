@@ -1,4 +1,4 @@
-import numpy as np 
+import numpy as np
 from skimage.transform import pyramid_gaussian
 from imutils.object_detection import non_max_suppression
 import imutils
@@ -7,20 +7,21 @@ from sklearn.externals import joblib
 import cv2
 from config import *
 from skimage import color
-import matplotlib.pyplot as plt 
-import os 
+import matplotlib.pyplot as plt
+import os
 import glob
+import sys
 
 def sliding_window(image, window_size, step_size):
     '''
-    This function returns a patch of the input 'image' of size 
-    equal to 'window_size'. The first image returned top-left 
+    This function returns a patch of the input 'image' of size
+    equal to 'window_size'. The first image returned top-left
     co-ordinate (0, 0) and are increment in both x and y directions
     by the 'step_size' supplied.
 
     So, the input parameters are-
     image - Input image
-    window_size - Size of Sliding Window 
+    window_size - Size of Sliding Window
     step_size - incremented Size of Window
 
     The function returns a tuple -
@@ -30,18 +31,18 @@ def sliding_window(image, window_size, step_size):
         for x in xrange(0, image.shape[1], step_size[0]):
             yield (x, y, image[y: y + window_size[1], x: x + window_size[0]])
 
-def detector(filename):
+def detector(filename,i,model):
     im = cv2.imread(filename)
     im = imutils.resize(im, width = min(400, im.shape[1]))
     min_wdw_sz = (64, 128)
     step_size = (10, 10)
     downscale = 1.25
 
-    clf = joblib.load(os.path.join(model_path, 'svm.model'))
+    clf = model
 
     #List to store the detections
     detections = []
-    #The current scale of the image 
+    #The current scale of the image
     scale = 0
 
     for im_scaled in pyramid_gaussian(im, downscale = downscale):
@@ -52,20 +53,19 @@ def detector(filename):
             if im_window.shape[0] != min_wdw_sz[1] or im_window.shape[1] != min_wdw_sz[0]:
                 continue
             im_window = color.rgb2gray(im_window)
-            fd = hog(im_window, orientations, pixels_per_cell, cells_per_block, visualize, normalize)
+            fd = hog(im_window, orientations, pixels_per_cell, cells_per_block)
 
             fd = fd.reshape(1, -1)
             pred = clf.predict(fd)
-
+            #print pred
             if pred == 1:
                 
-                if clf.decision_function(fd) > 0.5:
-                    detections.append((int(x * (downscale**scale)), int(y * (downscale**scale)), clf.decision_function(fd), 
+                #if clf.decision_function(fd) > 0.5:
+                    detections.append((int(x * (downscale**scale)), int(y * (downscale**scale)), pred, 
                     int(min_wdw_sz[0] * (downscale**scale)),
                     int(min_wdw_sz[1] * (downscale**scale))))
-                 
 
-            
+
         scale += 1
 
     clone = im.copy()
@@ -75,29 +75,39 @@ def detector(filename):
 
     rects = np.array([[x, y, x + w, y + h] for (x, y, _, w, h) in detections])
     sc = [score[0] for (x, y, score, w, h) in detections]
-    print "sc: ", sc
+    #print "sc: ", sc
     sc = np.array(sc)
-    pick = non_max_suppression(rects, probs = sc, overlapThresh = 0.3)
-    print "shape, ", pick.shape
+    pick = non_max_suppression(rects, probs = sc, overlapThresh = 0.25)
+    #print "shape, ", pick.shape
 
     for(xA, yA, xB, yB) in pick:
         cv2.rectangle(clone, (xA, yA), (xB, yB), (0, 255, 0), 2)
-    
+    '''
     plt.axis("off")
     plt.imshow(cv2.cvtColor(im, cv2.COLOR_BGR2RGB))
-    plt.title("Raw Detection before NMS")
+    plt.title("Raw Detection")
     plt.show()
 
     plt.axis("off")
     plt.imshow(cv2.cvtColor(clone, cv2.COLOR_BGR2RGB))
-    plt.title("Final Detections after applying NMS")
+    plt.title("Final Detections")
     plt.show()
+    '''
+
+    image = cv2.cvtColor(clone, cv2.COLOR_BGR2RGB)
+    cv2.imwrite(("../output/" + "%d" + sys.argv[1] + ".jpg") % i, image)
+
 
 def test_folder(foldername):
+    model = sys.argv[1]
+
+    clf = joblib.load(os.path.join(model_path, model))
 
     filenames = glob.iglob(os.path.join(foldername, '*'))
+    i = 0
     for filename in filenames:
-        detector(filename)
+        i=i+1
+        detector(filename,i,clf)
 
 if __name__ == '__main__':
     foldername = 'test_image'
