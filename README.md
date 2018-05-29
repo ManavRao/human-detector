@@ -1,7 +1,7 @@
 ##To run the model 
 1. create the following directory structure
        
-       human-detection
+       human-detector
         |
         |_________ data
         |           |_______ models
