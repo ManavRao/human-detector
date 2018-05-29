@@ -1,4 +1,6 @@
-##To run the model 
+
+## To run the model
+
 1. create the following directory structure
        
        human-detector
